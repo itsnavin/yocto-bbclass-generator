@@ -1,0 +1,21 @@
+{
+  "name": "yocto-bbclass-generator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --test tests/generator.test.js",
+    "test:browser": "playwright test",
+    "fixtures": "node tests/write-fixtures.js"
+  },
+  "dependencies": {
+    "fflate": "0.8.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2",
+    "vite": "6.4.4"
+  }
+}

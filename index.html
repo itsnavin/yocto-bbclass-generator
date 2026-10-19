@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+    <meta name="description" content="A guided, private, browser-only Yocto Scarthgap bbclass generator with advanced task and metadata controls.">
+    <meta name="color-scheme" content="light">
+    <title>Classcraft | Yocto bbclass generator</title>
+    <link rel="stylesheet" href="./src/style.css">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23155045'/%3E%3Ctext x='6' y='29' fill='white' font-size='27'%3E%7B%7D%3C/text%3E%3C/svg%3E">
+  </head>
+  <body>
+    <a class="skip" href="#builder">Skip to generator</a>
+    <header class="topbar">
+      <a href="./" class="brand"><span class="brand-icon" aria-hidden="true">{ }</span> Classcraft <span class="brand-sub">/ Yocto tools</span></a>
+      <a href="https://github.com/itsnavin/yocto-bbclass-generator">Source &amp; docs <span aria-hidden="true">↗</span></a>
+    </header>
+    <main>
+      <section class="hero" aria-labelledby="title">
+        <div>
+          <p class="eyebrow"><span class="dot"></span> SCARTHGAP EDITION · YOCTO 5.0.13</p>
+          <h1 id="title">Reusable classes.<br><span>Without the guesswork.</span></h1>
+          <p class="intro">Turn a recipe pattern into a <code>.bbclass</code>. Start with a guided template, understand each decision, then take the metadata into your own layer.</p>
+        </div>
+        <aside class="hero-note"><span class="small-label">YOUR WORKSPACE, YOUR RULES</span><strong>Local by design.</strong><p>No accounts. No API. No metadata uploaded. Everything is generated in this browser, and nothing is executed.</p><a href="#reference">Read the field guide ↓</a></aside>
+      </section>
+      <div class="warning banner"><strong>One class, many recipes.</strong> Changes affect every inheriting recipe. Review generated metadata and only trust code you understand before running BitBake.</div>
+      <section id="builder" class="workspace" aria-label="Class generator">
+        <form id="config" novalidate>
+          <section class="card">
+            <div class="section-heading"><span class="step">01</span><div><h2>Choose a starting point</h2><p>Small, focused patterns you can build on.</p></div></div>
+            <label for="scope">Class scope</label>
+            <p class="help" id="scope-help">Recipe classes are explicitly inherited by recipes. Global classes are loaded through configuration and must not assume a recipe task context.</p>
+            <select id="scope" aria-describedby="scope-help"><option value="recipe">Recipe class · inherit</option><option value="global">Global metadata class · INHERIT</option></select>
+            <div id="recipe-template">
+              <label for="template">Guided template</label>
+              <p class="help" id="template-help">Each template adds a namespaced task, never a blanket do_install append. Switching templates resets task ordering and the custom editor.</p>
+              <select id="template" aria-describedby="template-help">
+                <option value="report">Metadata report · observe the recipe</option>
+                <option value="preflight">Preflight · validate required metadata</option>
+                <option value="asset">Install a data asset · package a supplied file</option>
+                <option value="custom">Custom task · write trusted code</option>
+              </select>
+              <p id="template-description" class="callout"></p>
+            </div>
+            <div class="two-cols">
+              <div><label for="name">Class name</label><p class="help" id="name-help">Lowercase letters, digits and underscores; start with a letter. Used to namespace tasks and variables.</p><input id="name" value="recipe_audit" maxlength="48" aria-describedby="name-help" spellcheck="false"></div>
+              <div><label for="location">Class directory</label><p class="help" id="location-help">Scoped directories are searched before shared classes, using BBPATH layer order. Shared classes may be loaded in either context.</p><select id="location" aria-describedby="location-help"><option value="scoped">classes-recipe (recommended)</option><option value="shared">classes (shared lookup)</option></select></div>
+            </div>
+          </section>
+          <section class="card" id="task-section">
+            <div class="section-heading"><span class="step">02</span><div><h2>Shape the task</h2><p>Keep the contract small and predictable.</p></div></div>
+            <label for="language">Task language</label>
+            <p class="help" id="language-help">Shell uses POSIX sh and bbnote/bbfatal. Python uses BitBake's d datastore and bb.note/bb.fatal. The asset template uses shell install into ${D}, never the host root. Changing language in the custom template resets its body to a matching starter.</p>
+            <select id="language" aria-describedby="language-help"><option value="python">BitBake Python</option><option value="shell">POSIX shell</option></select>
+            <div id="custom-editor" hidden>
+              <label for="body">Trusted task body</label>
+              <p class="help warning" id="body-help">Executable BitBake metadata, not sanitized code. Paste only trusted code. The editor preserves your body inside a function; the browser neither parses nor runs it. Do not include the outer function declaration.</p>
+              <textarea id="body" rows="9" spellcheck="false" aria-describedby="body-help">bb.note("Hello from " + d.getVar("PN"))</textarea>
+            </div>
+            <div id="asset-options" hidden>
+              <label for="asset">Source asset filename</label><p class="help" id="asset-help">A simple .txt filename. The bundle supplies it beside the recipe in files/ and adds file:// to SRC_URI. Installed as mode 0644 under ${D}${datadir}/${BPN}; included in FILES:${PN}.</p>
+              <input id="asset" value="example.txt" aria-describedby="asset-help" spellcheck="false">
+            </div>
+            <p id="task-summary" class="help"></p>
+          </section>
+          <section class="card">
+            <details id="advanced">
+              <summary><span class="step">03</span><span>Advanced controls <small>Optional · explained before you use them</small></span><span class="chevron" aria-hidden="true">+</span></summary>
+              <div class="details-body">
+                <h3>Variable declarations</h3>
+                <p class="help">Added to the class after template defaults. <code>=</code> assigns with deferred expansion; <code>?=</code> sets only if undefined at parse time (first wins); <code>??=</code> is a weak fallback (last weak default wins); <code>:=</code> expands now and preserves undefined references. Ordering matters. Both quote styles still expand BitBake references.</p>
+                <p class="help">Values allow plain text, one style of quote, and <code>${VARIABLE}</code> references. Backslashes, line breaks, inline Python and mixed quotes are rejected, not silently rewritten. This is a constrained metadata editor, not a security sandbox.</p>
+                <div id="variables"></div>
+                <button id="add-variable" type="button" class="secondary">+ Add variable</button>
+                <p class="help">Override tokens use modern colon syntax, e.g. <code>class-native</code> or <code>qemux86-64</code>. They take effect only when active in OVERRIDES. <code>append</code>/<code>prepend</code>/<code>remove</code> are operations, not accepted here as condition tokens. Expansion and override precedence are resolved by BitBake, not this preview.</p>
+                <div id="recipe-advanced">
+                  <h3>Inheritance &amp; dependencies</h3>
+                  <label for="inherits">Additional inherited classes</label><p class="help" id="inherits-help">Space-separated class names in declared order, inserted at the beginning. Earlier inheritance and later assignments can change results; inspect bitbake -e. These classes must exist on BBPATH. Do not inherit this class itself.</p><input id="inherits" placeholder="e.g. pkgconfig" aria-describedby="inherits-help" spellcheck="false">
+                  <label for="build-depends">Build-time recipe dependencies · DEPENDS</label><p class="help" id="build-help">Space-separated recipe/provider names. Adds build dependencies for recipe sysroot integration, not runtime package installation. A tool generally needs its -native provider for host execution.</p><input id="build-depends" placeholder="e.g. zlib" aria-describedby="build-help" spellcheck="false">
+                  <label for="runtime-depends">Runtime package dependencies · RDEPENDS:${PN}</label><p class="help" id="runtime-help">Space-separated package names, not recipe names. Only emitted for the data-asset package template. Required packages must have real providers; no version expressions in this field.</p><input id="runtime-depends" aria-describedby="runtime-help" spellcheck="false">
+                  <h3>Ordering &amp; task flags</h3>
+                  <p class="help">These apply only to the generated task. <code>after</code> makes it depend on predecessors; <code>before</code> makes successors depend on it. An after edge alone does not schedule this task into a normal build. Keep a reachable before edge. Cycles involving other metadata require BitBake to detect.</p>
+                  <div class="two-cols"><div><label for="after">After tasks</label><input id="after" value="do_patch" aria-label="After tasks" spellcheck="false"></div><div><label for="before">Before tasks</label><input id="before" value="do_configure" aria-label="Before tasks" spellcheck="false"></div></div>
+                  <p class="help">Space-separated full task names, e.g. <code>do_patch</code>. The asset task stays after do_install and before do_package and do_populate_sysroot so staging consumers see its output.</p>
+                  <label for="dirs">dirs · create directories / working directory</label><p class="help" id="dirs-help">Existing content is preserved. The last directory becomes the task working directory. Restricted to ${WORKDIR} or ${B}, optionally followed by simple relative segments. No traversal or host paths.</p><input id="dirs" placeholder="${WORKDIR}" aria-describedby="dirs-help" spellcheck="false">
+                  <label for="task-depends">depends · explicit cross-recipe task edges</label><p class="help" id="depends-help">Space-separated recipe:do_task pairs, e.g. zlib-native:do_populate_sysroot. Makes this task wait for those provider tasks. Unlike DEPENDS, this is a direct task edge, not general sysroot metadata.</p><input id="task-depends" aria-describedby="depends-help" spellcheck="false">
+                  <label for="task-rdepends">rdepends · explicit runtime task edges</label><p class="help" id="rdepends-help">Space-separated package:do_task pairs resolved in the runtime provider namespace. Does not add RDEPENDS package installation metadata. Use only when a real runtime provider task is needed.</p><input id="task-rdepends" aria-describedby="rdepends-help" spellcheck="false">
+                  <label for="vardeps">vardeps · additional signature inputs</label><p class="help" id="vardeps-help">Space-separated variable identifiers. Adds dependencies static analysis may miss (for example dynamically constructed d.getVar keys). Not a substitute for declaring actual file/tool inputs.</p><input id="vardeps" aria-describedby="vardeps-help" spellcheck="false">
+                  <p class="help warning" id="nostamp-help">nostamp prevents a task stamp. It and dependent tasks can run on every build, causing rebuild cascades. Leave off for normal reproducible tasks.</p><label class="check"><input id="nostamp" type="checkbox" aria-describedby="nostamp-help"> Always rerun this task (nostamp)</label>
+                </div>
+              </div>
+            </details>
+          </section>
+        </form>
+        <section class="output card" aria-labelledby="output-title">
+          <div class="output-heading"><div><p class="eyebrow">LIVE METADATA</p><h2 id="output-title">Your class, ready to review.</h2></div><span class="local-badge">● Browser only</span></div>
+          <div id="validation" class="validation" role="status" aria-live="polite"></div>
+          <div class="tabs" role="tablist" aria-label="Generated files">
+            <button type="button" id="tab-class" role="tab" aria-selected="true" aria-controls="preview" data-file="class">.bbclass</button>
+            <button type="button" id="tab-recipe" role="tab" aria-selected="false" aria-controls="preview" data-file="recipe" tabindex="-1">Sample recipe</button>
+            <button type="button" id="tab-guide" role="tab" aria-selected="false" aria-controls="preview" data-file="guide" tabindex="-1">Usage guide</button>
+          </div>
+          <div class="file-bar"><span id="filename"></span><button type="button" id="copy" class="text-button">Copy file</button></div>
+          <pre id="preview" role="tabpanel" aria-labelledby="tab-class" tabindex="0"><code id="code"></code></pre>
+          <div class="download-bar"><button type="button" id="download" class="secondary">Download file</button><button type="button" id="bundle" class="primary">Download starter layer ↓</button></div>
+          <p class="help download-note">ZIP includes class, sample recipe, any source asset, layer.conf and a usage README. Downloads never run automatically. Requires an existing configured Scarthgap environment with the core layer.</p>
+          <p id="action-status" role="status" aria-live="polite"></p>
+        </section>
+      </section>
+      <section id="reference" class="reference" aria-labelledby="reference-title">
+        <p class="eyebrow">THE FIELD GUIDE</p><h2 id="reference-title">Generate here. Verify in BitBake.</h2>
+        <p class="reference-intro">A structured preview is not a build result. Custom code is unparsed and untrusted; your sources, providers, overrides and toolchain must be checked in your real environment.</p>
+        <div class="guide-grid">
+          <article class="card"><h3>01 / Put it in a layer</h3><p>Recipe: <code>classes-recipe/name.bbclass</code> with <code>inherit name</code> in a recipe. Global: <code>classes-global/name.bbclass</code> with <code>INHERIT += "name"</code> in configuration. Global generation is deliberately variables-only.</p><p><code>classes/</code> is the fallback shared directory for both contexts. Scoped directories are searched first across BBPATH; layer order can shadow same-named classes. Don't use a global class for per-recipe install tasks.</p></article>
+          <article class="card"><h3>02 / Inspect before building</h3><pre><code>bitbake-layers show-layers
+bitbake-layers show-recipes
+bitbake -p
+bitbake -e your-sample
+bitbake -c listtasks your-sample
+bitbake -g your-sample
+bitbake your-sample</code></pre><p>Run from an initialized Yocto build shell, after adding the layer. Replace <code>your-sample</code> with the generated recipe name. <code>-p</code> parses metadata; <code>-e</code> expands it (including trusted anonymous Python); <code>-g</code> writes dependency graphs, not a build. Inspect <code>${T}/log.do_*</code> and <code>run.do_*</code> after tasks. The ZIP guide has exact commands.</p></article>
+          <article class="card"><h3>03 / Advanced, intentionally explicit</h3><p><code>prefuncs</code>/<code>postfuncs</code> name helper functions run inside an existing task, not separately scheduled tasks. Define helpers before attaching them. <code>EXPORT_FUNCTIONS</code> requires <code>classname_functionname</code> implementations to let recipes call the original implementation.</p><p>Anonymous <code>python ()</code> runs at parse finalization, not task time; keep it deterministic, with no I/O side effects. <code>BBCLASSEXTEND = "native nativesdk"</code> creates recipe variants only where dependencies, tool usage and packaging support them. These are reference topics, not generated switches.</p></article>
+          <article class="card"><h3>04 / Respect the build contract</h3><p>Use <code>${D}</code> for staged installation and the provided <code>${CC}</code>/<code>${CFLAGS}</code>/<code>${LDFLAGS}</code> for cross-compilation. Never use host gcc or disable QA to hide errors. The data template uses install, not a compiler.</p><p>Signatures track task bodies and detected variable dependencies; stamps can skip unchanged work. <code>vardeps</code> fills analysis gaps. We deliberately omit <code>cleandirs</code>: it deletes and recreates directories before execution. No template performs host cleanup.</p></article>
+        </div>
+        <div class="sources"><strong>Release contract</strong><p>Yocto 5.0.13 Scarthgap · bundled BitBake 2.8.1. Poky commit <code>f16cffd030d21d12dd57bb95cfc310bda41f8a1f</code>. Annotated tag object <code>529843b1c189ab7b133b7fdf197d4b2a4b71a6db</code> points to that commit; it is not a commit SHA.</p><a href="https://docs.yoctoproject.org/5.0.13/ref-manual/structure.html#meta-classes">Yocto 5.0.13 structure</a><a href="https://docs.yoctoproject.org/bitbake/2.8/bitbake-user-manual/bitbake-user-manual-metadata.html">BitBake 2.8 metadata manual</a><a href="https://github.com/yoctoproject/poky/blob/f16cffd030d21d12dd57bb95cfc310bda41f8a1f/bitbake/lib/bb/parse/parse_py/BBHandler.py">Pinned class lookup implementation</a><a href="https://docs.yoctoproject.org/5.0.13/dev-manual/debugging.html">Debugging &amp; validation</a></div>
+      </section>
+    </main>
+    <footer><span class="brand">Classcraft <span class="brand-sub">/ Small classes. Clear intent.</span></span><span>Independent tool · not an official Yocto Project product</span></footer>
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

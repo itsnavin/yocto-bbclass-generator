@@ -1,0 +1,59 @@
+name: Validate and publish
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Exact Scarthgap BitBake parser (built-in fixtures only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .bitbake-source
+          curl --fail --location --silent --show-error \
+            https://codeload.github.com/yoctoproject/poky/tar.gz/f16cffd030d21d12dd57bb95cfc310bda41f8a1f \
+            -o .bitbake-source/poky.tar.gz
+          tar -xzf .bitbake-source/poky.tar.gz -C .bitbake-source \
+            --strip-components=2 --wildcards '*/bitbake/*'
+          npm run fixtures
+          python3 tests/parser_fixture.py
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - run: npm run build -- --base=/yocto-bbclass-generator/
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          path: dist
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
