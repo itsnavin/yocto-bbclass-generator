@@ -10,31 +10,88 @@ clears them. Generated code is not automatically saved or executed.
 ## What it generates
 
 - Recipe-class templates: metadata report, required-value preflight, staged data
-  asset installation, or an explicitly trusted custom shell/Python task.
+  asset installation, packaged configuration, target systemd service, or an
+  explicitly trusted custom shell/Python task.
 - Recipe-scoped `classes-recipe/`, metadata-only global `classes-global/`, or
   shared `classes/` placement, with matching `inherit` / configuration `INHERIT`.
 - Namespaced tasks; `addtask` before/after edges; `dirs`, `depends`, `rdepends`,
   `vardeps` and opt-in `nostamp`, each explained before selection.
 - Multiple variable declarations with `=`, `?=`, `??=`, `:=`, simple `${VAR}`
-  references and modern colon override conditions.
-- Additional recipe inheritance, build-time `DEPENDS`, and packaged asset
+  references, modern colon override conditions and conditional
+  `:append`/`:prepend`/`:remove` operations with explicit spacing.
+- Namespaced `prefuncs`/`postfuncs` logging helpers in shell or Python; optional
+  `EXPORT_FUNCTIONS` with correct class-prefix implementation names and a sample
+  recipe replacement that calls the original.
+- Anonymous Python generation: literal default-if-undefined, required-variable
+  check with `bb.fatal`, or an explicitly unparsed trusted custom body.
+- `BBCLASSEXTEND` on the report/preflight sample recipe: native, nativesdk or
+  both. The reusable class never forces variants on all inheritors.
+- Additional recipe inheritance, build-time `DEPENDS`, and packaged
   `RDEPENDS:${PN}`; task dependency namespaces are separately explained.
 - Live text preview, accessible keyboard tabs, clipboard with explicit failure
   feedback, individual file downloads, and a ZIP starter layer containing
   `layer.conf`, `.bbclass`, a real sample `.bb`, any required source asset and
-  exact installation/validation instructions.
+  exact installation/validation instructions. The Bundle files tab previews and
+  downloads every supplied source file, not just the class/recipe.
 
 The asset template installs a supplied MIT demo text file under
 `${D}${datadir}/${BPN}`, extending `FILES:${PN}` after `do_install` and before
 `do_package` and `do_populate_sysroot`. The task uses fakeroot with an explicit
 `virtual/fakeroot-native:do_populate_sysroot` dependency for target ownership.
-It neither replaces nor appends to `do_install`. Other built-in
-examples are intentionally no-source and use `nopackages`. Sample recipes use
+It neither replaces nor appends to `do_install`. Data/configuration install
+helpers allow a constrained relative subdirectory and 0644/0600 file mode;
+empty subdirectory preserves `${BPN}`. Configuration output installs its supplied
+`.conf` under `${sysconfdir}`, with matching package-scoped `FILES:${PN}` and
+`CONFFILES:${PN}` target paths (no `${D}` in package metadata).
+
+The service template inherits `systemd features_check`, requires systemd in
+`DISTRO_FEATURES`, and emits package-scoped `SYSTEMD_SERVICE:${PN}` and
+`SYSTEMD_AUTO_ENABLE:${PN}`. Policies are disable (default), enable, mask and
+preset. The supplied `.service.in` has a harmless oneshot
+`ExecStart=@BASE_BINDIR@/true`. Installation replaces the placeholder with
+`${base_bindir}`; the explicit `coreutils` runtime dependency supplies the actual
+program there through Scarthgap's alternatives (also under usrmerge). The ZIP is
+not executed and no service is started by this tool. Real package scripts,
+systemd presets and target boot behavior require an actual target build/test.
+
+Other built-in examples are intentionally no-source and use `nopackages`. Sample recipes use
 Poky's common MIT license; change the source/licensing/architecture for real work.
 
-Reference-only guidance covers anonymous Python, prefuncs/postfuncs,
-EXPORT_FUNCTIONS, BBCLASSEXTEND and signatures. These are **not generated
-switches**. Global generation deliberately emits only variable declarations,
+### Guided advanced constraints
+
+Every optional feature has inline purpose, placement and side-effect guidance
+before selection. Logging hooks attach to the generated task, not arbitrary
+standard tasks. Exported replacements are limited to report/preflight/custom
+tasks so installation templates preserve their fakeroot contract. Python exports
+call `bb.build.exec_func("classname_functionname", d)`; shell exports call the
+class-prefixed function. The public task retains ordering and flags.
+
+Anonymous defaults use `d.getVar(name) is None` and `d.setVar`, preserving
+explicit empty strings. Required-variable checks run at parse finalization,
+not at build-task time; the sample recipe supplies the required value. Literal
+fields reject expansions/line injection; the separate custom body is executable
+metadata, not sanitized or parsed. User-authored anonymous Python is **never run
+in browser, remotely, or in tests**. When you later parse it with BitBake, even
+`-p`/`-e` may execute its arbitrary side effects. Do not paste untrusted code.
+
+Variants are limited to the no-source report/preflight examples. Selecting them
+omits `allarch` and writes `BBCLASSEXTEND` on the example recipe. `native` is for
+the build host; `nativesdk` is for the SDK host. Installation/custom templates
+cannot select them here. The UI explains and resets incompatible switches when
+changing templates; direct generation requests reject invalid combinations.
+Direct `native`/`nativesdk` inheritance is blocked in favor of the managed
+variant control; service inheritance is owned by the service template.
+Installation templates reject `nopackages`, and variants reject `allarch`.
+Arbitrary additional classes can change behavior and must be reviewed.
+
+Override operations use `VARIABLE:operation[:condition] = "value"`. Assignment
+operators other than `=` apply only to set, not override operations. Append and
+prepend add no automatic space; values are preserved exactly. BitBake applies
+append, then prepend, then remove, only for active conditions. Duplicate rows
+are rejected per variable/operation/condition, while a base assignment and
+conditional operations can coexist. The browser does not simulate OVERRIDES.
+
+Global generation deliberately emits only variable declarations/operations,
 not recipe tasks or arbitrary inheritance. `cleandirs` is omitted because it
 deletes directories; there are no host-cleanup templates, QA bypasses or blanket
 installation hooks.
@@ -71,8 +128,10 @@ This exercises the actual live copy/download/ZIP interactions as well as the UI.
 
 Desktop Chrome and emulated Pixel 7 checks exercise template selection,
 structured errors, optional help, variable editing/removal, keyboard tabs,
-global scope, inert custom code, clipboard success/failure, no external
-application requests, horizontal layout and file/ZIP downloads. This is Chromium
+global scope, inert custom task/anonymous code, hooks/exports, guided parse-time
+operations, variants and conflict controls, conditional variable operations,
+configuration/service packaging, clipboard success/failure, no external
+application requests, horizontal layout and file/ZIP/source downloads. This is Chromium
 coverage, not a claim of manual testing on physical mobile devices or all browsers.
 On Windows hosts with AdGuard injection, its `local.adguard.org` requests are
 annotated and excluded from the application-network assertion; the Linux CI
@@ -103,10 +162,26 @@ bundles. This project links to official documentation rather than redistributing
 Tests parse generated recipes/classes using BitBake's parser/datastore and
 intentionally execute **only fixed harmless built-in function bodies** in a
 disposable temporary directory. They check override expansion, assignments,
-task edges/flags, failing preflight and installed file contents/mode. Minimal
-allarch/nopackages/helper stubs isolate parser behavior; there is no OE-Core
-configuration, runqueue, sysroot, package builder, or cross-toolchain in this
-fixture. User custom code is excluded from both parser fixtures and execution.
+task edges/flags, export wrappers AND recipe replacements in both languages,
+prefunc/task/postfunc invocation, anonymous defaults and parse-time failures,
+conditional append/prepend/remove, and installed file contents/mode. Fixed
+functions/hooks are intentionally invoked with `bb.build.exec_func`, not a full
+task runqueue. Service fixtures parse the **actual pinned systemd and
+features_check classes**, exercise the missing-systemd skip guard and verify
+unit placeholder replacement, paths, package metadata and runtime dependency.
+They do not invoke systemd packaging callbacks or systemctl.
+
+Minimal allarch/nopackages/helper stubs isolate parser behavior. Native/nativesdk
+fixture stubs exercise BitBake's actual variant datastore mechanism and override
+selection, but **do not validate OE-Core native/nativesdk dependency/path
+rewriting**. Real variant builds remain mandatory. Fixture layers are copied
+into whitespace-free disposable Linux paths because BitBake 2.8 anonymous
+function naming cannot use whitespace-containing build paths. Use a supported
+Linux path without spaces for your real Yocto workspace.
+
+There is no OE-Core build configuration, runqueue, sysroot, package builder or
+cross-toolchain in this fixture. User custom code is excluded from both parsing
+and execution, including custom anonymous Python.
 **These checks are not a full Yocto recipe, image or toolchain build.**
 
 ## Trust and validation boundaries
@@ -120,7 +195,7 @@ non-simple `${...}` expansion. Rejected text is not silently stripped.
 The generator reserves template contract variables and common build plumbing.
 It does not emulate BitBake's datastore or guarantee a complete acyclic graph.
 
-Custom task bodies are intentional executable metadata, **not sanitized code**.
+Custom task and anonymous bodies are intentional executable metadata, **not sanitized code**.
 They are displayed as inert text, not run, evaluated, compiled or declared safe.
 Review and trust every inherited class and source before running BitBake;
 anonymous Python can run at parse time even with `-p` or `-e`. A parser accepting
@@ -148,6 +223,11 @@ That commit's `bitbake/lib/bb/__init__.py` reports **2.8.1**.
 - [Exact class lookup code](https://github.com/yoctoproject/poky/blob/f16cffd030d21d12dd57bb95cfc310bda41f8a1f/bitbake/lib/bb/parse/parse_py/BBHandler.py)
 - [Configuration inheritance context](https://github.com/yoctoproject/poky/blob/f16cffd030d21d12dd57bb95cfc310bda41f8a1f/bitbake/lib/bb/cookerdata.py)
 - [Debugging and build inspection](https://docs.yoctoproject.org/5.0.13/dev-manual/debugging.html)
+- [Pinned systemd class and package policy](https://github.com/yoctoproject/poky/blob/f16cffd030d21d12dd57bb95cfc310bda41f8a1f/meta/classes-recipe/systemd.bbclass)
+- [Pinned required-feature guard](https://github.com/yoctoproject/poky/blob/f16cffd030d21d12dd57bb95cfc310bda41f8a1f/meta/classes-recipe/features_check.bbclass)
+- [CONFFILES and FILES contract](https://docs.yoctoproject.org/5.0.13/ref-manual/variables.html#term-CONFFILES)
+- [Pinned coreutils true installation/alternatives](https://github.com/yoctoproject/poky/blob/f16cffd030d21d12dd57bb95cfc310bda41f8a1f/meta/recipes-core/coreutils/coreutils_9.4.bb)
+- [Exact export wrappers and variant finalization](https://github.com/yoctoproject/poky/blob/f16cffd030d21d12dd57bb95cfc310bda41f8a1f/bitbake/lib/bb/parse/ast.py)
 
 In that source, inheritance searches `classes-<context>` across BBPATH first,
 then `classes/`. Recipe context searches `classes-recipe`; configuration

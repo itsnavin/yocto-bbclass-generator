@@ -35,11 +35,13 @@
             <select id="scope" aria-describedby="scope-help"><option value="recipe">Recipe class · inherit</option><option value="global">Global metadata class · INHERIT</option></select>
             <div id="recipe-template">
               <label for="template">Guided template</label>
-              <p class="help" id="template-help">Each template adds a namespaced task, never a blanket do_install append. Switching templates resets task ordering and the custom editor.</p>
+              <p class="help" id="template-help">Each template adds a namespaced task, never a blanket do_install append. Switching resets task ordering, runtime dependencies and the custom task editor. Installation templates turn exports off; variants turn off outside report/preflight. Anonymous code is preserved.</p>
               <select id="template" aria-describedby="template-help">
                 <option value="report">Metadata report · observe the recipe</option>
                 <option value="preflight">Preflight · validate required metadata</option>
                 <option value="asset">Install a data asset · package a supplied file</option>
+                <option value="config">Install configuration · CONFFILES upgrade handling</option>
+                <option value="service">Systemd service · target-only unit package</option>
                 <option value="custom">Custom task · write trusted code</option>
               </select>
               <p id="template-description" class="callout"></p>
@@ -52,7 +54,7 @@
           <section class="card" id="task-section">
             <div class="section-heading"><span class="step">02</span><div><h2>Shape the task</h2><p>Keep the contract small and predictable.</p></div></div>
             <label for="language">Task language</label>
-            <p class="help" id="language-help">Shell uses POSIX sh and bbnote/bbfatal. Python uses BitBake's d datastore and bb.note/bb.fatal. The asset template uses shell install into ${D}, never the host root. Changing language in the custom template resets its body to a matching starter.</p>
+            <p class="help" id="language-help">Shell uses POSIX sh and bbnote/bbfatal. Python uses BitBake's d datastore and bb.note/bb.fatal. Installation templates use shell staging into ${D}, never the host root. Changing language in the custom template resets its body to a matching starter.</p>
             <select id="language" aria-describedby="language-help"><option value="python">BitBake Python</option><option value="shell">POSIX shell</option></select>
             <div id="custom-editor" hidden>
               <label for="body">Trusted task body</label>
@@ -63,6 +65,22 @@
               <label for="asset">Source asset filename</label><p class="help" id="asset-help">A simple .txt filename. The bundle supplies it beside the recipe in files/ and adds file:// to SRC_URI. Installed as mode 0644 under ${D}${datadir}/${BPN}; included in FILES:${PN}.</p>
               <input id="asset" value="example.txt" aria-describedby="asset-help" spellcheck="false">
             </div>
+            <div id="config-options" hidden>
+              <label for="config-file">Configuration filename</label><p class="help" id="config-file-help">A simple .conf filename. Supplied in files/ and installed under ${sysconfdir}/${BPN} (or your subdirectory). CONFFILES:${PN} lists the installed target path without ${D}, for package-manager upgrade handling. Review backend-specific behavior; not a backup guarantee.</p>
+              <input id="config-file" value="example.conf" aria-describedby="config-file-help" spellcheck="false">
+            </div>
+            <div id="service-options" hidden>
+              <label for="service-file">Service unit filename</label><p class="help" id="service-file-help">A simple lowercase .service name. The ZIP supplies a .service.in unit whose @BASE_BINDIR@ placeholder is replaced at installation. ExecStart uses ${base_bindir}/true from the declared coreutils runtime dependency (also correct for usrmerge). This is a harmless oneshot demo, not a daemon implementation.</p>
+              <input id="service-file" value="classcraft-demo.service" aria-describedby="service-file-help" spellcheck="false">
+              <label for="service-enable">SYSTEMD_AUTO_ENABLE:${PN}</label><p class="help" id="service-enable-help">Package-scoped policy: disable leaves the service unenabled; enable may enable/start it when the package is installed; mask prevents activation; preset delegates to distro presets. Requires systemd in DISTRO_FEATURES and a target package. No service is started here.</p>
+              <select id="service-enable" aria-describedby="service-enable-help"><option value="disable">disable · do not automatically enable (recommended)</option><option value="enable">enable · enable at package installation</option><option value="mask">mask · prevent activation</option><option value="preset">preset · distribution policy</option></select>
+            </div>
+            <div id="install-options" hidden>
+              <label for="install-subdir">Install subdirectory (optional)</label><p class="help" id="install-subdir-help">Data files use ${datadir}; configuration files use ${sysconfdir}. Empty uses ${BPN}, preserving the original template. Otherwise enter simple relative segments, e.g. company/demo. No absolute path, traversal or expansion. FILES and CONFFILES follow the exact installed location.</p>
+              <input id="install-subdir" aria-describedby="install-subdir-help" placeholder="Empty = ${BPN}" spellcheck="false">
+              <label for="install-mode">Installed file permissions</label><p class="help" id="install-mode-help">0644 is readable by all, writable by owner; 0600 is owner-only. Fakeroot supplies target root ownership in a real build. Directories use install -d and are not emptied. Templates never contain secrets.</p>
+              <select id="install-mode" aria-describedby="install-mode-help"><option value="0644">0644 · ordinary data</option><option value="0600">0600 · owner-only data</option></select>
+            </div>
             <p id="task-summary" class="help"></p>
           </section>
           <section class="card">
@@ -72,14 +90,31 @@
                 <h3>Variable declarations</h3>
                 <p class="help">Added to the class after template defaults. <code>=</code> assigns with deferred expansion; <code>?=</code> sets only if undefined at parse time (first wins); <code>??=</code> is a weak fallback (last weak default wins); <code>:=</code> expands now and preserves undefined references. Ordering matters. Both quote styles still expand BitBake references.</p>
                 <p class="help">Values allow plain text, one style of quote, and <code>${VARIABLE}</code> references. Backslashes, line breaks, inline Python and mixed quotes are rejected, not silently rewritten. This is a constrained metadata editor, not a security sandbox.</p>
+                <p class="help" id="operation-help">Choose set for assignments/defaults, or append/prepend/remove for expansion-time override operations. Append/prepend do <strong>not</strong> add spaces: put a leading/trailing separator in the value. BitBake applies append, then prepend, then remove. Conditions remain separate from operations.</p>
                 <div id="variables"></div>
                 <button id="add-variable" type="button" class="secondary">+ Add variable</button>
                 <p class="help">Override tokens use modern colon syntax, e.g. <code>class-native</code> or <code>qemux86-64</code>. They take effect only when active in OVERRIDES. <code>append</code>/<code>prepend</code>/<code>remove</code> are operations, not accepted here as condition tokens. Expansion and override precedence are resolved by BitBake, not this preview.</p>
                 <div id="recipe-advanced">
+                  <h3>Task hooks &amp; exported implementations</h3>
+                  <label for="hooks">Task logging hooks</label><p class="help" id="hooks-help">Generate namespaced shell/Python helpers and attach them to this task's prefuncs/postfuncs varflags with +=. They log before/after this task inside its execution context, not as separately scheduled tasks. Existing hook lists are preserved; errors propagate.</p>
+                  <select id="hooks" aria-describedby="hooks-help"><option value="none">No hooks</option><option value="pre">Before task · prefuncs</option><option value="post">After task · postfuncs</option><option value="both">Before and after · both hooks</option></select>
+                  <p class="help" id="export-help">EXPORT_FUNCTIONS keeps the original implementation at classname_functionname. The sample recipe replaces the namespaced public task and calls the original (shell function call or Python bb.build.exec_func). Flags stay on the public task. Limited to report/preflight/custom; installation templates keep their fixed fakeroot contract.</p>
+                  <label class="check"><input type="checkbox" id="export-functions" aria-describedby="export-help"> Export the task implementation</label>
+                  <h3>Anonymous Python · parse-time operations</h3>
+                  <label for="anonymous">Parse-time datastore operation</label><p class="help warning" id="anonymous-help">Runs at recipe parse finalization, including bitbake -p/-e, not at task time. Guided options use only d.getVar/d.setVar/bb.fatal. A default applies only if undefined; a required value fails for missing/empty metadata and is supplied by the sample recipe. Custom code can have arbitrary side effects when you later run BitBake; it is not parsed or executed here.</p>
+                  <select id="anonymous" aria-describedby="anonymous-help"><option value="none">No anonymous Python</option><option value="default">Set a literal if undefined · d.setVar</option><option value="require">Require a nonempty variable · bb.fatal</option><option value="custom">Custom trusted anonymous Python</option></select>
+                  <div id="anonymous-fields" hidden>
+                    <label for="anonymous-variable">Parse-time variable name</label><p class="help">Non-reserved uppercase identifier. The default runs after assignments/overrides; it does not replace an existing empty string. Require inspects the final value.</p><input id="anonymous-variable" value="CLASSCRAFT_LABEL" spellcheck="false">
+                    <label for="anonymous-value">Literal default / sample required value</label><p class="help">Literal text only, no ${...} expansion, control characters or backslashes. For require, this is written in the sample recipe; an empty entry uses example-value.</p><input id="anonymous-value" value="ready" spellcheck="false">
+                  </div>
+                  <div id="anonymous-custom" hidden><label for="anonymous-body">Trusted anonymous Python body</label><p class="help warning" id="anonymous-body-help">Executable parse-time code; no outer python () wrapper. Never paste untrusted code. Downloading is inert, but merely parsing it with BitBake may run arbitrary operations. Browser checks do not certify syntax or safety.</p><textarea id="anonymous-body" rows="7" spellcheck="false" aria-describedby="anonymous-body-help">d.setVar("CLASSCRAFT_LABEL", "ready")</textarea></div>
+                  <h3>Recipe variants</h3>
+                  <label for="variants">BBCLASSEXTEND on the sample recipe</label><p class="help" id="variants-help">native builds for the build host; nativesdk for the SDK host, not the target. Only the no-source report/preflight examples support these switches; they omit allarch. The reusable class does not force variants on its inheritors. Real native/nativesdk path/dependency rewriting still needs OE-Core build validation. Target installation and custom-code templates cannot select variants here.</p>
+                  <select id="variants" aria-describedby="variants-help"><option value="none">Target recipe only</option><option value="native">Target + native</option><option value="nativesdk">Target + nativesdk</option><option value="both">Target + native + nativesdk</option></select>
                   <h3>Inheritance &amp; dependencies</h3>
                   <label for="inherits">Additional inherited classes</label><p class="help" id="inherits-help">Space-separated class names in declared order, inserted at the beginning. Earlier inheritance and later assignments can change results; inspect bitbake -e. These classes must exist on BBPATH. Do not inherit this class itself.</p><input id="inherits" placeholder="e.g. pkgconfig" aria-describedby="inherits-help" spellcheck="false">
                   <label for="build-depends">Build-time recipe dependencies · DEPENDS</label><p class="help" id="build-help">Space-separated recipe/provider names. Adds build dependencies for recipe sysroot integration, not runtime package installation. A tool generally needs its -native provider for host execution.</p><input id="build-depends" placeholder="e.g. zlib" aria-describedby="build-help" spellcheck="false">
-                  <label for="runtime-depends">Runtime package dependencies · RDEPENDS:${PN}</label><p class="help" id="runtime-help">Space-separated package names, not recipe names. Only emitted for the data-asset package template. Required packages must have real providers; no version expressions in this field.</p><input id="runtime-depends" aria-describedby="runtime-help" spellcheck="false">
+                  <label for="runtime-depends">Runtime package dependencies · RDEPENDS:${PN}</label><p class="help" id="runtime-help">Space-separated package names, not recipe names. Available for data/configuration/service packages. Service output also adds coreutils for its true executable. Required packages must have real providers; no version expressions in this field.</p><input id="runtime-depends" aria-describedby="runtime-help" spellcheck="false">
                   <h3>Ordering &amp; task flags</h3>
                   <p class="help">These apply only to the generated task. <code>after</code> makes it depend on predecessors; <code>before</code> makes successors depend on it. An after edge alone does not schedule this task into a normal build. Keep a reachable before edge. Cycles involving other metadata require BitBake to detect.</p>
                   <div class="two-cols"><div><label for="after">After tasks</label><input id="after" value="do_patch" aria-label="After tasks" spellcheck="false"></div><div><label for="before">Before tasks</label><input id="before" value="do_configure" aria-label="Before tasks" spellcheck="false"></div></div>
@@ -101,7 +136,9 @@
             <button type="button" id="tab-class" role="tab" aria-selected="true" aria-controls="preview" data-file="class">.bbclass</button>
             <button type="button" id="tab-recipe" role="tab" aria-selected="false" aria-controls="preview" data-file="recipe" tabindex="-1">Sample recipe</button>
             <button type="button" id="tab-guide" role="tab" aria-selected="false" aria-controls="preview" data-file="guide" tabindex="-1">Usage guide</button>
+            <button type="button" id="tab-files" role="tab" aria-selected="false" aria-controls="preview" data-file="files" tabindex="-1">Bundle files</button>
           </div>
+          <div id="artifact-picker" class="artifact-picker" hidden><label for="artifact">Bundled file to preview / download</label><select id="artifact"></select></div>
           <div class="file-bar"><span id="filename"></span><button type="button" id="copy" class="text-button">Copy file</button></div>
           <pre id="preview" role="tabpanel" aria-labelledby="tab-class" tabindex="0"><code id="code"></code></pre>
           <div class="download-bar"><button type="button" id="download" class="secondary">Download file</button><button type="button" id="bundle" class="primary">Download starter layer ↓</button></div>
@@ -121,7 +158,7 @@ bitbake -e your-sample
 bitbake -c listtasks your-sample
 bitbake -g your-sample
 bitbake your-sample</code></pre><p>Run from an initialized Yocto build shell, after adding the layer. Replace <code>your-sample</code> with the generated recipe name. <code>-p</code> parses metadata; <code>-e</code> expands it (including trusted anonymous Python); <code>-g</code> writes dependency graphs, not a build. Inspect <code>${T}/log.do_*</code> and <code>run.do_*</code> after tasks. The ZIP guide has exact commands.</p></article>
-          <article class="card"><h3>03 / Advanced, intentionally explicit</h3><p><code>prefuncs</code>/<code>postfuncs</code> name helper functions run inside an existing task, not separately scheduled tasks. Define helpers before attaching them. <code>EXPORT_FUNCTIONS</code> requires <code>classname_functionname</code> implementations to let recipes call the original implementation.</p><p>Anonymous <code>python ()</code> runs at parse finalization, not task time; keep it deterministic, with no I/O side effects. <code>BBCLASSEXTEND = "native nativesdk"</code> creates recipe variants only where dependencies, tool usage and packaging support them. These are reference topics, not generated switches.</p></article>
+          <article class="card"><h3>03 / Advanced, intentionally explicit</h3><p>Advanced controls now generate <code>prefuncs</code>/<code>postfuncs</code> logging helpers, <code>EXPORT_FUNCTIONS</code> implementations with recipe replacement examples, and guided or custom anonymous Python. Anonymous <code>python ()</code> runs at parse finalization, even with -p/-e; keep it deterministic and trust all code.</p><p><code>BBCLASSEXTEND</code> is generated on report/preflight sample recipes only; they omit allarch for native/SDK variants. Variable rows support conditional append/prepend/remove. Configuration and systemd templates supply their actual files, install tasks and package-scoped metadata. Native variants and target install templates cannot be mixed.</p></article>
           <article class="card"><h3>04 / Respect the build contract</h3><p>Use <code>${D}</code> for staged installation and the provided <code>${CC}</code>/<code>${CFLAGS}</code>/<code>${LDFLAGS}</code> for cross-compilation. Never use host gcc or disable QA to hide errors. The data template uses install, not a compiler.</p><p>Signatures track task bodies and detected variable dependencies; stamps can skip unchanged work. <code>vardeps</code> fills analysis gaps. We deliberately omit <code>cleandirs</code>: it deletes and recreates directories before execution. No template performs host cleanup.</p></article>
         </div>
         <div class="sources"><strong>Release contract</strong><p>Yocto 5.0.13 Scarthgap · bundled BitBake 2.8.1. Poky commit <code>f16cffd030d21d12dd57bb95cfc310bda41f8a1f</code>. Annotated tag object <code>529843b1c189ab7b133b7fdf197d4b2a4b71a6db</code> points to that commit; it is not a commit SHA.</p><a href="https://docs.yoctoproject.org/5.0.13/ref-manual/structure.html#meta-classes">Yocto 5.0.13 structure</a><a href="https://docs.yoctoproject.org/bitbake/2.8/bitbake-user-manual/bitbake-user-manual-metadata.html">BitBake 2.8 metadata manual</a><a href="https://github.com/yoctoproject/poky/blob/f16cffd030d21d12dd57bb95cfc310bda41f8a1f/bitbake/lib/bb/parse/parse_py/BBHandler.py">Pinned class lookup implementation</a><a href="https://docs.yoctoproject.org/5.0.13/dev-manual/debugging.html">Debugging &amp; validation</a></div>

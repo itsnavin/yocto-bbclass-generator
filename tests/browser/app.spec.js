@@ -31,7 +31,7 @@ test('guided generation, advanced help, keyboard tabs and responsive layout', as
   await page.keyboard.press('ArrowRight');
   await expect(page.locator('#tab-recipe')).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#code')).toContainText('inherit allarch nopackages team_audit');
-  await page.keyboard.press('End');
+  await page.keyboard.press('ArrowRight');
   await expect(page.locator('#code')).toContainText('bitbake -g team-audit-example');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(errors).toEqual([]);
@@ -136,4 +136,107 @@ test('advanced controls wire language, ordering, dependency namespaces and signa
   await page.locator('#runtime-depends').fill('zlib');
   await expect(page.locator('#code')).toContainText('RDEPENDS:${PN} += "zlib"');
   await expect(page.locator('#code')).toContainText('fakeroot do_recipe_audit_install_asset');
+});
+
+test('hooks, exports, anonymous operations and recipe variants generate real metadata', async ({ page }) => {
+  await page.goto('./');
+  await page.locator('#advanced summary').click();
+  await expect(page.locator('#hooks-help')).toBeVisible();
+  await page.locator('#hooks').selectOption('both');
+  await page.locator('#export-functions').check();
+  await page.locator('#anonymous').selectOption('default');
+  await page.locator('#anonymous-variable').fill('TEAM_LABEL');
+  await page.locator('#anonymous-value').fill('ready');
+  await page.locator('#variants').selectOption('both');
+  for (const expected of [
+    'do_recipe_audit_report[prefuncs] += "recipe_audit_pre_hook"',
+    'do_recipe_audit_report[postfuncs] += "recipe_audit_post_hook"',
+    'python recipe_audit_do_recipe_audit_report()',
+    'EXPORT_FUNCTIONS do_recipe_audit_report',
+    'python () {', 'd.setVar("TEAM_LABEL", "ready")',
+  ]) await expect(page.locator('#code')).toContainText(expected);
+  await page.locator('#tab-recipe').click();
+  await expect(page.locator('#code')).toContainText('BBCLASSEXTEND = "native nativesdk"');
+  await expect(page.locator('#code')).toContainText('bb.build.exec_func("recipe_audit_do_recipe_audit_report", d)');
+  await expect(page.locator('#code')).not.toContainText('allarch');
+  await page.locator('#anonymous').selectOption('require');
+  await expect(page.locator('#code')).toContainText('TEAM_LABEL = "ready"');
+  await page.locator('#language').selectOption('shell');
+  await expect(page.locator('#code')).toContainText('    recipe_audit_do_recipe_audit_report');
+  await page.locator('#tab-class').click();
+  await expect(page.locator('#code')).toContainText('bbnote "Recipe:');
+  await expect(page.locator('#code')).toContainText('bb.fatal("TEAM_LABEL');
+});
+
+test('override operations keep conditional syntax and explicit separators', async ({ page }) => {
+  await page.goto('./');
+  await page.locator('#advanced summary').click();
+  await page.getByRole('button', { name: '+ Add variable' }).click();
+  await page.getByLabel('Variable name', { exact: true }).fill('TEAM_LIST');
+  await page.getByLabel('Variable operation', { exact: true }).selectOption('append');
+  await page.getByLabel('Override condition (optional)').fill('class-native');
+  await page.getByLabel('Value (empty is allowed)').fill(' extra');
+  await expect(page.getByLabel('Assignment operator')).toBeDisabled();
+  await expect(page.locator('#code')).toContainText('TEAM_LIST:append:class-native = " extra"');
+  await page.getByLabel('Variable operation', { exact: true }).selectOption('remove');
+  await expect(page.locator('#code')).toContainText('TEAM_LIST:remove:class-native = " extra"');
+});
+
+for (const template of ['config', 'service']) {
+  test(`${template} packaging controls and downloaded files are coherent`, async ({ page }) => {
+    await page.goto('./');
+    await page.locator('#advanced summary').click();
+    await page.locator('#variants').selectOption('native');
+    await page.locator('#export-functions').check();
+    await page.locator('#template').selectOption(template);
+    await expect(page.locator('#variants')).toHaveValue('none');
+    await expect(page.locator('#variants')).toBeDisabled();
+    await expect(page.locator('#export-functions')).not.toBeChecked();
+    await expect(page.locator('#export-functions')).toBeDisabled();
+    if (template === 'config') {
+      await page.locator('#config-file').fill('settings.conf');
+      await page.locator('#install-subdir').fill('team/demo');
+      await page.locator('#install-mode').selectOption('0600');
+      await expect(page.locator('#code')).toContainText('CONFFILES:${PN} += "${sysconfdir}/team/demo/settings.conf"');
+      await expect(page.locator('#code')).toContainText('install -m 0600');
+    } else {
+      await page.locator('#service-file').fill('team-demo.service');
+      await page.locator('#service-enable').selectOption('preset');
+      await expect(page.locator('#code')).toContainText('inherit systemd features_check');
+      await expect(page.locator('#code')).toContainText('SYSTEMD_SERVICE:${PN} = "team-demo.service"');
+      await expect(page.locator('#code')).toContainText('SYSTEMD_AUTO_ENABLE:${PN} = "preset"');
+      await expect(page.locator('#code')).toContainText('RDEPENDS:${PN} += "coreutils"');
+    }
+    const downloaded = page.waitForEvent('download');
+    await page.locator('#bundle').click();
+    const zip = await downloaded;
+    const contents = unzipSync(await readFile(await zip.path()));
+    const filename = template === 'config' ? 'settings.conf' : 'team-demo.service.in';
+    const source = `recipes-examples/classcraft/files/${filename}`;
+    expect(strFromU8(contents[`meta-classcraft/${source}`])).toContain(template === 'config' ? 'message=' : 'ExecStart=@BASE_BINDIR@/true');
+    await page.locator('#tab-files').click();
+    await page.locator('#artifact').selectOption(source);
+    await expect(page.locator('#code')).toContainText(template === 'config' ? 'message=' : '[Service]');
+    const single = page.waitForEvent('download');
+    await page.locator('#download').click();
+    expect((await single).suggestedFilename()).toBe(filename);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.locator('#inherits').fill('native');
+    await expect(page.locator('#validation')).toContainText('managed variants/service');
+    await expect(page.locator('#bundle')).toBeDisabled();
+  });
+}
+
+test('custom anonymous Python is inert, clearly warned and suppressed in global mode', async ({ page }) => {
+  await page.goto('./');
+  await page.locator('#advanced summary').click();
+  await page.locator('#anonymous').selectOption('custom');
+  const body = '# <img src=x onerror="alert(1)">\nd.setVar("USER_CODE", "not run")';
+  await page.locator('#anonymous-body').fill(body);
+  await expect(page.locator('#code')).toContainText('d.setVar("USER_CODE", "not run")');
+  await expect(page.locator('#validation')).toContainText('anonymous code runs at BitBake parse time');
+  await expect(page.locator('#preview img')).toHaveCount(0);
+  await page.locator('#scope').selectOption('global');
+  await expect(page.locator('#code')).not.toContainText('python ()');
+  await expect(page.locator('#code')).not.toContainText('USER_CODE');
 });
